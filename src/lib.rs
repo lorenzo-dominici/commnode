@@ -2,13 +2,17 @@ use std::sync::Arc;
 
 use tokio::sync::mpsc::{self, error::TrySendError};
 
+use regex::Regex;
+
+use chrono::{DateTime, Utc};
+
 pub struct Dispatcher {
     subs: Vec<Subscription>,
-    rx: mpsc::Receiver<Event>,
+    rx: mpsc::Receiver<Command>,
 }
 
 impl Dispatcher {
-    pub fn new(buffer: usize) -> mpsc::Sender<Event> {
+    pub fn new(buffer: usize) -> mpsc::Sender<Command> {
         let (tx, rx) = mpsc::channel(buffer);
         let this = Self {
             subs: Vec::default(),
@@ -18,20 +22,20 @@ impl Dispatcher {
         tokio::spawn(async move {
             this.run().await;
         });
-
+        
         tx
     }
 
     async fn run(mut self) {
-        while let Some(event) = self.rx.recv().await {
-            match event {
-                Event::Subscribe(sub) => self.subs.push(sub),
-                Event::Clear => self.clear(),
-                _ => self.dispatch(event),
+        while let Some(cmd) = self.rx.recv().await {
+            match cmd {
+                Command::Subscribe(sub) => self.subs.push(sub),
+                Command::Clear => self.clear(),
+                Command::Forward(event) => self.dispatch(event),
             }
         }
     }
-
+    
     fn clear(&mut self) {
         self.subs.retain(|sub| {
             sub.is_active()
@@ -47,15 +51,15 @@ impl Dispatcher {
 }
 
 #[derive(Clone)]
-pub enum Event {
+pub enum Command {
     Subscribe(Subscription),
     Clear,
-    Raw(Vec<u8>),
+    Forward(Event),
 }
 
 #[derive(Clone)]
 pub struct Subscription {
-    topic: Topic,
+    interest: Interest,
     tx: mpsc::Sender<Arc<Event>>,
 }
 
@@ -72,18 +76,46 @@ impl Subscription {
     }
 
     pub fn is_valid(&self, event: &Event) -> bool {
-        self.topic.is_valid(event)
+        self.interest.is_valid(event)
     }
 }
 
 #[derive(Clone)]
-pub struct Topic {
-    //TODO: add validation scheme (e.g. regex)
+pub struct Interest {
+    validator: Regex,
 }
 
-impl Topic {
-    pub fn is_valid(&self, event: &Event) -> bool {
-        //TODO: implement validation
-        true
+impl Interest {
+    pub fn new(validator: Regex) -> Self {
+        Self {
+            validator,
+        }
     }
+
+    pub fn is_valid(&self, event: &Event) -> bool {
+        self.validator.is_match(&event.topic)
+    }
+}
+
+#[derive(Clone)]
+pub struct Event {
+    pub topic: String,
+    pub timestamp: DateTime<Utc>,
+    pub data: Data,
+}
+
+impl Event {
+    pub fn new(topic: &str, data: Data) -> Self {
+        Self {
+            topic: String::from(topic),
+            timestamp: Utc::now(),
+            data,
+        }
+    }
+}
+
+#[derive(Clone)]
+pub enum Data {
+    String(String),
+    Bytes(Vec<u8>),
 }
