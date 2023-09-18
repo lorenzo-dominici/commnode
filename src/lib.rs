@@ -1,10 +1,14 @@
+mod framing;
+
 use std::sync::Arc;
 
-use tokio::sync::mpsc::{self, error::TrySendError};
+use tokio::{sync::mpsc::{self, error::TrySendError}, io::{AsyncRead, AsyncWrite}};
 
 use regex::Regex;
 
 use chrono::{DateTime, Utc};
+
+use serde::{Deserialize, Serialize};
 
 pub struct Dispatcher {
     subs: Vec<Subscription>,
@@ -97,7 +101,7 @@ impl Interest {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Event {
     pub topic: String,
     pub timestamp: DateTime<Utc>,
@@ -114,7 +118,7 @@ impl Event {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum Data {
     String(String),
     Bytes(Vec<u8>),
