@@ -2,7 +2,7 @@ mod framing;
 
 use std::sync::Arc;
 
-use tokio::{sync::mpsc::{self, error::TrySendError}, io::{AsyncRead, AsyncWrite}};
+use tokio::sync::mpsc::{self, error::TrySendError};
 
 use regex::Regex;
 
