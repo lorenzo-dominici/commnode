@@ -1,7 +1,9 @@
 mod framing;
+mod protocols;
 
 use std::sync::Arc;
 
+use bytes::Bytes;
 use tokio::sync::mpsc::{self, error::TrySendError};
 
 use regex::Regex;
@@ -105,21 +107,15 @@ impl Interest {
 pub struct Event {
     pub topic: String,
     pub timestamp: DateTime<Utc>,
-    pub data: Data,
+    pub data: Bytes,
 }
 
 impl Event {
-    pub fn new(topic: &str, data: Data) -> Self {
+    pub fn new(topic: &str, data: Bytes) -> Self {
         Self {
             topic: String::from(topic),
             timestamp: Utc::now(),
             data,
         }
     }
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub enum Data {
-    String(String),
-    Bytes(Vec<u8>),
 }

@@ -1,13 +1,13 @@
 use super::Event;
 
-use tokio::io::{AsyncRead, AsyncWrite};
+use tokio::{io::{AsyncRead, AsyncWrite}, net::TcpStream};
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
-use tokio_serde::formats::SymmetricalJson;
+use tokio_serde::{SymmetricallyFramed, formats::SymmetricalBincode};
 
-pub type FramedStream<T> = tokio_serde::Framed<Framed<T,  LengthDelimitedCodec>, Event, Event, SymmetricalJson<Event>>;
+pub type FramedStream<T> = SymmetricallyFramed<Framed<T, LengthDelimitedCodec>, Event, SymmetricalBincode<Event>>;
 
 pub fn frame_stream<T: AsyncRead + AsyncWrite>(stream: T) -> FramedStream<T> {
-    let wrapped: Framed<T,  LengthDelimitedCodec> = Framed::new(stream, LengthDelimitedCodec::new());
-    let framed: FramedStream<T> = FramedStream::new(wrapped, SymmetricalJson::default());
+    let codec = Framed::new(stream, LengthDelimitedCodec::new());
+    let framed = FramedStream::new(codec, SymmetricalBincode::<Event>::default());
     framed
 }
