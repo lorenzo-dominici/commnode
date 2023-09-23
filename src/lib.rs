@@ -2,56 +2,59 @@ mod framing;
 mod protocols;
 
 use std::sync::Arc;
-
 use bytes::Bytes;
-use tokio::sync::mpsc::{self, error::TrySendError};
-
+use tokio::{sync::mpsc::{self, error::{TrySendError, SendError}}, select};
+use tokio_util::sync::CancellationToken;
 use regex::Regex;
-
 use chrono::{DateTime, Utc};
-
 use serde::{Deserialize, Serialize};
 
 pub struct Dispatcher {
     subs: Vec<Subscription>,
     rx: mpsc::Receiver<Command>,
+    token: CancellationToken,
 }
 
 impl Dispatcher {
-    pub fn new(buffer: usize) -> mpsc::Sender<Command> {
+    pub fn new(buffer: usize) -> (mpsc::Sender<Command>, CancellationToken) {
         let (tx, rx) = mpsc::channel(buffer);
-        let this = Self {
+        let token = CancellationToken::new();
+        let dispatcher = Self {
             subs: Vec::default(),
             rx: rx,
+            token: token.clone(),
         };
 
         tokio::spawn(async move {
-            this.run().await;
+            dispatcher.run().await;
         });
         
-        tx
+        (tx, token)
     }
 
     async fn run(mut self) {
-        while let Some(cmd) = self.rx.recv().await {
-            match cmd {
-                Command::Subscribe(sub) => self.subs.push(sub),
-                Command::Clear => self.clear(),
-                Command::Forward(event) => self.dispatch(event),
+        loop {
+            select! {
+                _ = self.token.cancelled() => break,
+                Some(cmd) = self.rx.recv() => {
+                    match cmd {
+                            Command::Subscribe(sub) => self.subs.push(sub),
+                            Command::Forward(event) => self.dispatch(event),
+                        }
+                },
             }
         }
     }
-    
-    fn clear(&mut self) {
-        self.subs.retain(|sub| {
-            sub.is_active()
-        });
-    }
 
-    fn dispatch(&self, event: Event) {
+    fn dispatch(&mut self, event: Event) {
         let arc = Arc::new(event);
-        self.subs.iter().for_each(|sub| {
-            let _ = sub.forward(arc.clone());
+        self.subs.retain(|sub| {
+            if sub.is_active() {
+                let _ = sub.forward(arc.clone());
+                return true;
+            } else {
+                return false
+            }
         });
     }
 }
@@ -59,7 +62,6 @@ impl Dispatcher {
 #[derive(Clone)]
 pub enum Command {
     Subscribe(Subscription),
-    Clear,
     Forward(Event),
 }
 
@@ -70,6 +72,20 @@ pub struct Subscription {
 }
 
 impl Subscription {
+    pub fn new(interest: Interest, buffer: usize) -> (Self, mpsc::Receiver<Arc<Event>>) {
+        let (tx, rx) = mpsc::channel(buffer);
+        (Self {
+            interest,
+            tx,
+        }, rx)
+    }
+
+    pub async fn subscribe(interest: Interest, buffer: usize, dispatcher: mpsc::Sender<Command>) -> Result<mpsc::Receiver<Arc<Event>>, SendError<Command>> {
+        let (sub, rx) = Self::new(interest, buffer);
+        dispatcher.send(Command::Subscribe(sub)).await?;
+        Ok(rx)
+    }
+
     pub fn is_active(&self) -> bool {
         !self.tx.is_closed()
     }
