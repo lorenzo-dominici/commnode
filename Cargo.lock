@@ -135,6 +135,7 @@ dependencies = [
  "tokio",
  "tokio-serde",
  "tokio-util",
+ "udp-stream",
 ]
 
 [[package]]
@@ -686,6 +687,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0955b8137a1df6f1a2e9a37d8a6656291ff0297c1a97c24e0d8425fe2312f79a"
 dependencies = [
  "once_cell",
+]
+
+[[package]]
+name = "udp-stream"
+version = "0.0.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8df3ef1fa3dfd82c5ada9eec0093cfbb1775a063eda2f38443d4fafd3081af19"
+dependencies = [
+ "bytes",
+ "tokio",
 ]
 
 [[package]]
