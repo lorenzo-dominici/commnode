@@ -1,6 +1,9 @@
 mod framing;
 mod protocols;
 
+#[cfg(test)]
+mod test;
+
 use std::sync::Arc;
 use bytes::Bytes;
 use tokio::{sync::mpsc::{self, error::{TrySendError, SendError}}, select};
