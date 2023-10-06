@@ -1,3 +1,5 @@
+//! This module offers functions to use the UDP communication protocol for sending and receiving `Event`s.
+
 use std::io::{Error, ErrorKind};
 
 use tokio::net::{ToSocketAddrs, lookup_host};
@@ -12,6 +14,14 @@ use futures::{StreamExt, SinkExt};
 use crate::framing::{FramedStream, frame_stream};
 use crate::Event;
 
+/// Runs a new task acting as a listener on a given socket.
+/// 
+/// # Parameters
+/// - `addr` : the socket address of the listener.
+/// - `tx` : a transmitter to send back the `Event`s received from the UDP communicaitons.
+/// 
+/// # Returns
+/// - cancellation token for handling termination.
 pub async fn new_receiver<T: ToSocketAddrs>(addr: T, tx: mpsc::Sender<Event>) -> Result<CancellationToken, Box<dyn std::error::Error>> {
     let listener = UdpListener::bind(lookup_host(addr).await?.next().ok_or(Error::new(ErrorKind::InvalidData, "address not found"))?).await?;
     let token = CancellationToken::new();
@@ -22,6 +32,7 @@ pub async fn new_receiver<T: ToSocketAddrs>(addr: T, tx: mpsc::Sender<Event>) ->
     Ok(token)
 }
 
+// Listener task
 async fn listen(listener: UdpListener, tx: mpsc::Sender<Event>, token: CancellationToken) {
     loop {
         select! {
@@ -38,6 +49,7 @@ async fn listen(listener: UdpListener, tx: mpsc::Sender<Event>, token: Cancellat
     }
 }
 
+// Stream handler
 async fn process(mut stream: FramedStream<UdpStream>, tx: mpsc::Sender<Event>, token: CancellationToken) {
     loop {
         select! {
@@ -51,6 +63,11 @@ async fn process(mut stream: FramedStream<UdpStream>, tx: mpsc::Sender<Event>, t
     }
 }
 
+/// Runs a new task acting as a UDP sender to a given socket.
+/// 
+/// # Parameters
+/// - `addr` : the socket address of the listener.
+/// - `rx` : a receiver to use as the source of the `Event`s to forward to the UDP channel.
 pub async fn new_sender<T: ToSocketAddrs>(addr: T, rx: mpsc::Receiver<Event>) -> Result<(), Box<dyn std::error::Error>> {
     let stream = UdpStream::connect(lookup_host(addr).await?.next().ok_or(Error::new(ErrorKind::InvalidData, "address not found"))?).await?;
     let stream = frame_stream(stream);
@@ -60,6 +77,7 @@ pub async fn new_sender<T: ToSocketAddrs>(addr: T, rx: mpsc::Receiver<Event>) ->
     Ok(())
 }
 
+//Sender task
 async fn send(mut stream: FramedStream<UdpStream>, mut rx: mpsc::Receiver<Event>) {
 
     while let Some(event) = rx.recv().await {
