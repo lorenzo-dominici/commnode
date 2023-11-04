@@ -4,6 +4,7 @@
 
 pub mod framing;
 pub mod protocols;
+pub mod config;
 
 #[cfg(test)]
 mod test;
