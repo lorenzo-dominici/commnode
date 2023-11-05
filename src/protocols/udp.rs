@@ -22,14 +22,12 @@ use crate::Event;
 /// 
 /// # Returns
 /// - cancellation token for handling termination.
-pub async fn new_receiver<T: ToSocketAddrs>(addr: T, tx: mpsc::Sender<Event>) -> Result<CancellationToken, Box<dyn std::error::Error>> {
+pub async fn new_receiver<T: ToSocketAddrs>(addr: T, tx: mpsc::Sender<Event>, token: CancellationToken) -> Result<(), Box<dyn std::error::Error>> {
     let listener = UdpListener::bind(lookup_host(addr).await?.next().ok_or(Error::new(ErrorKind::InvalidData, "address not found"))?).await?;
-    let token = CancellationToken::new();
-    let clone = token.clone();
     tokio::spawn(async move {
-        listen(listener, tx, clone).await;
+        listen(listener, tx, token).await;
     });
-    Ok(token)
+    Ok(())
 }
 
 // Listener task
@@ -79,7 +77,6 @@ pub async fn new_sender<T: ToSocketAddrs>(addr: T, rx: mpsc::Receiver<Event>) ->
 
 //Sender task
 async fn send(mut stream: FramedStream<UdpStream>, mut rx: mpsc::Receiver<Event>) {
-
     while let Some(event) = rx.recv().await {
         let _ = stream.send(event).await;
     }
