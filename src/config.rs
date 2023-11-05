@@ -11,6 +11,7 @@ use crate::{protocols::{Protocol, tcp, udp}, Interest, Subscription, Command};
 #[derive(Serialize, Deserialize)]
 pub struct Config {
  // pub graph: Option<Graph>,
+    pub local: Node,
     pub nodes: Vec<Node>,
 }
 
@@ -65,6 +66,14 @@ fn parse_config<P: AsRef<Path>>(path: P) -> Result<Config, Box<dyn Error>> {
 pub async fn init_connections(path: &str, dispatcher: mpsc::Sender<Command>, buffer: usize, token: CancellationToken) -> Result<(), Box<dyn Error>> {
     let configs = get_configs(path)?;
     for config in configs {
+        for channel in config.local.channels {
+            let regex = match Regex::new(&channel.interest) {
+                Ok(re) => re,
+                Err(_) => continue,
+            };
+            let interest = Interest::new(regex);
+            launch_receiver(channel.protocol, &channel.address, interest, buffer, dispatcher.clone(), token.clone());
+        }
         for node in config.nodes {
             for channel in node.channels {
                 let regex = match Regex::new(&channel.interest) {
@@ -79,8 +88,38 @@ pub async fn init_connections(path: &str, dispatcher: mpsc::Sender<Command>, buf
     Ok(())
 }
 
-fn launch_sender(protocol: Protocol, address: &String, interest: Interest, buffer: usize, disp_tx: mpsc::Sender<Command>, token: CancellationToken) {
-    let addr = address.clone();
+fn launch_receiver(protocol: Protocol, address: &str, interest: Interest, buffer: usize, disp_tx: mpsc::Sender<Command>, token: CancellationToken) {
+    let addr = address.to_string().clone();
+    tokio::spawn(async move {
+        let (tx, mut rx) = mpsc::channel(buffer);
+        match protocol {
+            Protocol::TCP => {
+                tcp::new_receiver(addr, tx, token.clone()).await.unwrap();
+            },
+            Protocol::UDP => {
+                udp::new_receiver(addr, tx, token.clone()).await.unwrap();
+            },
+        };
+        loop {
+            select! {
+                _ = token.cancelled() => {},
+                dispatch = rx.recv() => {
+                    match dispatch {
+                        Some(event) => {
+                            if interest.is_valid(&event) {
+                                disp_tx.send(Command::Forward(event)).await.unwrap();
+                            }
+                        },
+                        None => break,
+                    }
+                }
+            }
+        }
+    });
+}
+
+fn launch_sender(protocol: Protocol, address: &str, interest: Interest, buffer: usize, disp_tx: mpsc::Sender<Command>, token: CancellationToken) {
+    let addr = address.to_string().clone();
     tokio::spawn(async move {
         let (sub, mut arc_rx) = Subscription::new(interest, buffer);
         let (tx, rx) = mpsc::channel(buffer);
