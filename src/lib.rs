@@ -34,9 +34,8 @@ impl Dispatcher {
     /// # Returns
     /// - A tokio::sync::mpsc::Sender<`Command`> to send commands to the `Dispatcher` instance.
     /// - A tokio_util::sync::CancellationToken to handle termination.
-    pub fn new(buffer: usize) -> (mpsc::Sender<Command>, CancellationToken) {
+    pub fn new(buffer: usize, token: CancellationToken) -> mpsc::Sender<Command> {
         let (tx, rx) = mpsc::channel(buffer);
-        let token = CancellationToken::new();
         let dispatcher = Self {
             subs: Vec::default(),
             rx: rx,
@@ -47,7 +46,7 @@ impl Dispatcher {
             dispatcher.run().await;
         });
         
-        (tx, token)
+        tx
     }
 
     // Command receiver
