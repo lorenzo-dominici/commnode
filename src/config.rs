@@ -4,7 +4,7 @@ use regex::Regex;
 use tokio::{select, sync::mpsc};
 use tokio_util::sync::CancellationToken;
 use toml;
-use serde::{Serialize, Deserialize};
+use serde::{Serialize, Deserialize, de::DeserializeOwned};
 
 use crate::{protocols::{Protocol, tcp, udp}, Interest, Subscription, Command};
 
@@ -39,32 +39,32 @@ pub struct Channel {
     pub interest: String,
 }
 
-pub fn get_configs(path: &str) -> Result<Vec<Config>, Box<dyn Error>> {
+pub fn read_n_toml(path: &str) -> Result<Vec<Config>, Box<dyn Error>> {
     let mut configs: Vec<Config> = Vec::new();
     if Path::new(path).is_dir() {
         let paths = fs::read_dir(path)?;
         for file_path in paths {
-            if let Ok(config) = parse_config(file_path?.path()) {
+            if let Ok(config) = read_toml(file_path?.path()) {
                 configs.push(config);
             }
         }
     } else {
-        if let Ok(config) = parse_config(path) {
+        if let Ok(config) = read_toml(path) {
             configs.push(config);
         }
     }
     Ok(configs)
 }
 
-fn parse_config<P: AsRef<Path>>(path: P) -> Result<Config, Box<dyn Error>> {
+pub fn read_toml<P: AsRef<Path>, T: DeserializeOwned>(path: P) -> Result<T, Box<dyn Error>> {
     let toml_str: String = fs::read_to_string(path)?;
-    let config: Config = toml::from_str(&toml_str)?;
-    Ok(config)
+    let toml_struct: T = toml::from_str(&toml_str)?;
+    Ok(toml_struct)
 }
 
 //TODO: implement logs
 pub async fn init_connections(path: &str, dispatcher: mpsc::Sender<Command>, buffer: usize, token: CancellationToken) -> Result<(), Box<dyn Error>> {
-    let configs = get_configs(path)?;
+    let configs = read_n_toml(path)?;
     for config in configs {
         for channel in config.local.channels {
             let regex = match Regex::new(&channel.interest) {
