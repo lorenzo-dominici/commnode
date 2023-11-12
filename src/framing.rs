@@ -15,3 +15,12 @@ pub fn frame_stream<T: AsyncRead + AsyncWrite>(stream: T) -> FramedStream<T> {
     let framed = FramedStream::new(inner, SymmetricalBincode::<Event>::default());
     framed
 }
+
+/// Alias for nested framed types.
+pub type FramedString<T> = Framed<T, LengthDelimitedCodec>;
+
+/// Returns the framed version of the input stream, with `LenghtDelimitedCodec` and `SymmetricalBincode` serialization.
+pub fn frame_string<T: AsyncRead + AsyncWrite>(stream: T) -> FramedString<T> {
+    let framed = Framed::new(stream, LengthDelimitedCodec::new());
+    framed
+}
