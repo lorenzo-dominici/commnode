@@ -39,21 +39,21 @@ pub struct Channel {
     pub interest: String,
 }
 
-pub fn read_n_toml(path: &str) -> Result<Vec<Config>, Box<dyn Error>> {
-    let mut configs: Vec<Config> = Vec::new();
+pub fn read_n_toml<T: DeserializeOwned>(path: &str) -> Result<Vec<T>, Box<dyn Error>> {
+    let mut tomls: Vec<T> = Vec::new();
     if Path::new(path).is_dir() {
         let paths = fs::read_dir(path)?;
         for file_path in paths {
-            if let Ok(config) = read_toml(file_path?.path()) {
-                configs.push(config);
+            if let Ok(parsed) = read_toml(file_path?.path()) {
+                tomls.push(parsed);
             }
         }
     } else {
-        if let Ok(config) = read_toml(path) {
-            configs.push(config);
+        if let Ok(parsed) = read_toml(path) {
+            tomls.push(parsed);
         }
     }
-    Ok(configs)
+    Ok(tomls)
 }
 
 pub fn read_toml<P: AsRef<Path>, T: DeserializeOwned>(path: P) -> Result<T, Box<dyn Error>> {
@@ -64,7 +64,7 @@ pub fn read_toml<P: AsRef<Path>, T: DeserializeOwned>(path: P) -> Result<T, Box<
 
 //TODO: implement logs
 pub async fn init_connections(path: &str, dispatcher: mpsc::Sender<Command>, buffer: usize, token: CancellationToken) -> Result<(), Box<dyn Error>> {
-    let configs = read_n_toml(path)?;
+    let configs = read_n_toml::<Config>(path)?;
     for config in configs {
         for channel in config.local.channels {
             let regex = match Regex::new(&channel.interest) {
