@@ -9,38 +9,25 @@ use serde::{Serialize, Deserialize, de::DeserializeOwned};
 
 use crate::{protocols::{Protocol, tcp, udp}, Interest, Subscription, Command, Event};
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Config {
- // pub graph: Option<Graph>,
-    pub receiver: Receiver,
-    pub sender: Node,
+    pub receiver: Option<Receiver>,
+    pub sender: Option<Node>,
 }
 
-/* Possible future implementation
-#[derive(Serialize, Deserialize)]
-pub struct Graph {
-    pub name: String,
-    pub meta: Option<String>,
-    pub info: Option<String>,
-}
-*/
-
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Node {
-    // pub name: String,
-    // pub meta: Option<String>,
-    // pub info: Option<String>,
     pub channels: Vec<Channel>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Channel {
     pub address: String,
     pub protocol: Protocol,
     pub interest: String,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Receiver {
     pub adv_topic: String,
     pub adv_interest: String,
@@ -74,33 +61,41 @@ pub fn read_toml<P: AsRef<Path>, T: DeserializeOwned>(path: P) -> Result<T, Box<
 pub async fn init_connections(path: &str, adv: bool, dispatcher: mpsc::Sender<Command>, buffer: usize, token: CancellationToken) -> Result<(), Box<dyn Error>> {
     let configs = read_n_toml::<Config>(path)?;
     for config in configs {
-        let recv = Arc::new(config.receiver);
-        let redirect = if adv {
-            if let Ok(re) = Regex::new(&recv.adv_interest) {
-                let (tx, rx) = mpsc::channel(buffer);
-                launch_redirect(rx, dispatcher.clone(), buffer, token.clone());
-                Some((Interest::new(re), tx))
-            } else {
-                None
-            }
+        let receiver = if let Some(receiver) = config.receiver {
+            Some(Arc::new(receiver))
         } else {
             None
         };
-        for channel in &recv.node.channels {
-            let regex = match Regex::new(&channel.interest) {
-                Ok(re) => re,
-                Err(_) => continue,
+        if let Some(recv) = receiver.clone() {
+            let redirect = if adv {
+                if let Ok(re) = Regex::new(&recv.adv_interest) {
+                    let (tx, rx) = mpsc::channel(buffer);
+                    launch_redirect(rx, dispatcher.clone(), buffer, token.clone());
+                    Some((Interest::new(re), tx))
+                } else {
+                    None
+                }
+            } else {
+                None
             };
-            let interest = Interest::new(regex);
-            launch_receiver(redirect.clone(), channel.protocol.clone(), &channel.address, interest, buffer, dispatcher.clone(), token.clone());
+            for channel in &recv.node.channels {
+                let regex = match Regex::new(&channel.interest) {
+                    Ok(re) => re,
+                    Err(_) => continue,
+                };
+                let interest = Interest::new(regex);
+                launch_receiver(redirect.clone(), channel.protocol.clone(), &channel.address, interest, buffer, dispatcher.clone(), token.clone());
+            }
         }
-        for channel in config.sender.channels {
-            let regex = match Regex::new(&channel.interest) {
-                Ok(re) => re,
-                Err(_) => continue,
-            };
-            let interest = Interest::new(regex);
-            launch_sender(if adv {Some(recv.clone())} else {None}, channel.protocol, &channel.address, interest, buffer, dispatcher.clone(), token.clone());
+        if let Some(sender) = config.sender {
+            for channel in sender.channels {
+                let regex = match Regex::new(&channel.interest) {
+                    Ok(re) => re,
+                    Err(_) => continue,
+                };
+                let interest = Interest::new(regex);
+                launch_sender(receiver.clone(), channel.protocol, &channel.address, interest, buffer, dispatcher.clone(), token.clone());
+            }
         }
     }
     Ok(())

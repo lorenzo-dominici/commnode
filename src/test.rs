@@ -111,25 +111,25 @@ fn config() {
 
 async fn config_run() {
     let config = Config {
-        receiver: Receiver {
+        receiver: Some(Receiver {
             adv_topic: "".to_string(),
             adv_interest: "".to_string(),
             node: Node {
-            channels: vec![
-                Channel {
-                    address: "127.0.0.1:8000".to_string(),
-                    protocol: Protocol::TCP,
-                    interest: r"^TCP$".to_string(),
-                },
-                Channel {
-                    address: "127.0.0.1:8001".to_string(),
-                    protocol: Protocol::UDP,
-                    interest: r"^UDP$".to_string(),
-                }
-            ]
-        },
-        },
-        sender: Node {
+                channels: vec![
+                    Channel {
+                        address: "127.0.0.1:8000".to_string(),
+                        protocol: Protocol::TCP,
+                        interest: r"^TCP$".to_string(),
+                    },
+                    Channel {
+                        address: "127.0.0.1:8001".to_string(),
+                        protocol: Protocol::UDP,
+                        interest: r"^UDP$".to_string(),
+                    }
+                ]
+            },
+        }),
+        sender: Some(Node {
                 channels: vec![
                     Channel {
                         address: "127.0.0.1:8010".to_string(),
@@ -152,7 +152,7 @@ async fn config_run() {
                         interest: r"^UDP 2$".to_string(),
                     }
                 ]
-            },
+            }),
     };
 
     let cfg_str = toml::to_string(&config).unwrap();

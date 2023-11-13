@@ -177,7 +177,7 @@ async fn launch_n_recvs(recv: Recv, dispatcher: Sender<Command>) -> Res {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 struct BridgeConfig {
     pub dispatcher_buffer: usize,
     pub channels_size: usize,
@@ -186,32 +186,32 @@ struct BridgeConfig {
     pub sockets: Vec<String>,   
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 struct Request {
     pub sends: Vec<Send>,
     pub recvs: Vec<Recv>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 struct Send {
     pub topic: String,
     pub data: String,
     pub expect: Option<Recv>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 struct Recv {
     pub id: String,
     pub interest: String,
     pub num: u16,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 struct Response {
     pub ress: Vec<Res>
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 struct Res {
     pub id: String,
     pub events: Vec<Event>,
