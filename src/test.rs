@@ -111,7 +111,10 @@ fn config() {
 
 async fn config_run() {
     let config = Config {
-        local: Node {
+        receiver: Receiver {
+            adv_topic: "".to_string(),
+            adv_interest: "".to_string(),
+            node: Node {
             channels: vec![
                 Channel {
                     address: "127.0.0.1:8000".to_string(),
@@ -125,8 +128,8 @@ async fn config_run() {
                 }
             ]
         },
-        nodes: vec![
-            Node {
+        },
+        sender: Node {
                 channels: vec![
                     Channel {
                         address: "127.0.0.1:8010".to_string(),
@@ -137,11 +140,7 @@ async fn config_run() {
                         address: "127.0.0.1:8011".to_string(),
                         protocol: Protocol::UDP,
                         interest: r"^UDP 1$".to_string(),
-                    }
-                ]
-            },
-            Node {
-                channels: vec![
+                    },
                     Channel {
                         address: "127.0.0.1:8020".to_string(),
                         protocol: Protocol::TCP,
@@ -153,8 +152,7 @@ async fn config_run() {
                         interest: r"^UDP 2$".to_string(),
                     }
                 ]
-            }
-        ]
+            },
     };
 
     let cfg_str = toml::to_string(&config).unwrap();
@@ -179,7 +177,7 @@ async fn config_run() {
     tcp::new_receiver("127.0.0.1:8020", s2_tcp_tx, token.clone()).await.unwrap();
     udp::new_receiver("127.0.0.1:8021", s2_udp_tx, token.clone()).await.unwrap();
 
-    init_connections(path, dispatcher.clone(), 32, token.clone()).await.unwrap();
+    init_connections(path, false, dispatcher.clone(), 32, token.clone()).await.unwrap();
 
     let (r_send_tcp_tx, r_send_tcp_rx) = mpsc::channel(32);
     let (r_send_udp_tx, r_send_udp_rx) = mpsc::channel(32);

@@ -7,7 +7,7 @@ use serde::{Serialize, Deserialize};
 pub mod tcp;
 pub mod udp;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub enum Protocol {
     TCP,
     UDP,

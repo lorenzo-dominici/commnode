@@ -22,7 +22,7 @@ async fn main() {
     logln(Color::Ok, "ok");
 
     log(Color::Text, "commnode configuration... ");
-    let result = commnode::config::init_connections(&config.configs_path, dispatcher.clone(), config.channels_size, token.clone()).await;
+    let result = commnode::config::init_connections(&config.configs_path, true, dispatcher.clone(), config.channels_size, token.clone()).await;
     if let None = log_unwrap(result) { return; }
     logln(Color::Ok, "ok");
 
