@@ -79,7 +79,7 @@ impl Dispatcher {
 }
 
 /// Types of commands valid fo the `Dispatcher`.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Command {
     /// Used for subscribing to the `Dispatcher`.
     Subscribe(Subscription),
@@ -88,7 +88,7 @@ pub enum Command {
 }
 
 /// Models the subscription of a task to the `Dispatcher`.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Subscription {
     interest: Interest,
     tx: mpsc::Sender<Arc<Event>>,
@@ -147,7 +147,7 @@ impl Subscription {
 }
 
 /// Represents the interest of a `Subscription` in a certain class of `Event`s.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Interest {
     validator: Regex,
 }

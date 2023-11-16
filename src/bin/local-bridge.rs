@@ -87,8 +87,8 @@ async fn handle_connection(stream: FramedString<TcpStream>, dispatcher: Sender<C
                         }
                     }
                 }
-                if !go_on {
-                    logln(Color::Warn, "request session crahsed!");
+                if go_on {
+                    logln(Color::Warn, &format!("request session crahsed! [code:{}]", go_on));
                     break;
                 }
             },
@@ -102,17 +102,25 @@ async fn handle_request(tx: Arc<Mutex<SplitSink<FramedString<TcpStream>, Bytes>>
         _ = token.cancelled() => {Err(std::io::Error::new(std::io::ErrorKind::Interrupted, "token cancelled"))?},
         result = async move {
                 let mut handles = Vec::new();
-                for recv in request.recvs {
-                    tokio::spawn(launch_recv(tx.clone(), recv, dispatcher.clone(), clone.clone()));
-                }
-                for send in request.sends {
-                    if let Some(recv) = send.expect {
-                        handles.push(tokio::spawn(launch_n_recvs(recv, dispatcher.clone())));
+                if let Some(recvs) = request.recvs {
+                    for recv in recvs {
+                        tokio::spawn(launch_recv(tx.clone(), recv, dispatcher.clone(), clone.clone()));
                     }
                 }
-                let mut ress = Vec::with_capacity(handles.len());
-                for handle in handles {
-                    ress.push(handle.await?);
+                let mut ress = Vec::new();
+                if let Some(sends) = request.sends {
+                    for send in &sends {
+                        if let Some(recv) = &send.expect {
+                            let rx = Subscription::subscribe(Interest::new(Regex::new(&recv.interest).unwrap()), recv.num.into(), dispatcher.clone()).await.unwrap();
+                            handles.push(tokio::spawn(launch_n_recvs(recv.clone(), rx)));
+                        }
+                    }
+                    for send in sends {
+                        dispatcher.send(Command::Forward(Event::new(&send.topic, Bytes::from(send.data)))).await?;
+                    }
+                    for handle in handles {
+                        ress.push(handle.await?);
+                    }
                 }
                 Ok(Response { ress })
             } => {result}
@@ -162,10 +170,9 @@ async fn launch_recv(tx: Arc<Mutex<SplitSink<FramedString<TcpStream>, Bytes>>>, 
     }
 }
 
-async fn launch_n_recvs(recv: Recv, dispatcher: Sender<Command>) -> Res {
+async fn launch_n_recvs(recv: Recv, mut rx: tokio::sync::mpsc::Receiver<Arc<Event>>) -> Res {
     let mut events = Vec::with_capacity(recv.num.into());
     if recv.num > 0 {
-        let mut rx = Subscription::subscribe(Interest::new(Regex::new(&recv.interest).unwrap()), recv.num.into(), dispatcher.clone()).await.unwrap();
         for _ in 0..recv.num {
             let event = rx.recv().await.ok_or(std::io::Error::new(std::io::ErrorKind::ConnectionAborted, "comms dropped")).unwrap();
             events.push(event.as_ref().clone());
@@ -188,8 +195,8 @@ struct BridgeConfig {
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Request {
-    pub sends: Vec<Send>,
-    pub recvs: Vec<Recv>,
+    pub sends: Option<Vec<Send>>,
+    pub recvs: Option<Vec<Recv>>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -199,7 +206,7 @@ struct Send {
     pub expect: Option<Recv>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 struct Recv {
     pub id: String,
     pub interest: String,
@@ -227,10 +234,10 @@ enum Color {
 impl fmt::Display for Color {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", match self {
-            Self::Text => "\033[0m",
-            Self::Ok => "\033[92m",
-            Self::Warn => "\033[93m",
-            Self::Err => "\033[91m",
+            Self::Text => "\x1b[0m",
+            Self::Ok => "\x1b[92m",
+            Self::Warn => "\x1b[93m",
+            Self::Err => "\x1b[91m",
         })
     }
 }
