@@ -1,20 +1,22 @@
 import socket
 import struct
+import toml
 
-class TcpBridge:
+class Bridge:
     def __init__(self, host, port):
         self.host = host
         self.port = port
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
     def connect(self):
-        self.socket.connect((self.host, self.port))
+        self.socket.connect((self.host, int(self.port)))
 
     def send(self, message):
         try:
             # Prefix the message with its length as a 4-byte little-endian binary data
             message_length = len(message)
             length_prefix = struct.pack('<I', message_length)
+            msg = length_prefix + message.encode()
             self.socket.sendall(length_prefix + message.encode())
         except Exception as e:
             pass
@@ -28,12 +30,17 @@ class TcpBridge:
 
             # Unpack the length prefix to get the message length (little-endian)
             message_length = struct.unpack('<I', length_prefix)[0]
+            
+            data = b''
 
-            # Receive the actual message
-            data = self.socket.recv(message_length)
-            if not data:
-                return None
-
+            while message_length > 0:
+                # Receive the actual message
+                d = self.socket.recv(message_length)
+                if not d:
+                    return None
+                message_length -= len(d)
+                data += d
+            
             return data.decode()
         except Exception as e:
             return None
@@ -42,19 +49,13 @@ class TcpBridge:
         self.socket.close()
 
 if __name__ == "__main__":
-    bridge = TcpBridge("127.0.0.1", 9000)
+    bridge = Bridge("127.0.0.1", 9000)
     bridge.connect()
-    bridge.send(
-'''
-[[sends]]
-topic = "test"
-data = "payload"
-
-[sends.expect]
-id = "1234"
-interest = "^test$"
-num = 1
-''')
-    msg = bridge.receive()
+    msg = toml.dumps({'sends': [{'topic': 'test', 'data': b'payload', 'expect': {'topic': 'test', 'recv': {'id': '1234', 'interest': r'^test$', 'num': 1}}}]})
     print(msg)
+    bridge.send(msg)
+    msg = bridge.receive()
+    obj = toml.loads(msg)
+    obj['ress'][0]['packets'][0]['data'] = bytes(obj['ress'][0]['packets'][0]['data']).decode()
+    print(obj)
     bridge.close()

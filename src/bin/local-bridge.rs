@@ -29,6 +29,7 @@ async fn main() {
     log(Color::Text, "local bridge initialization... ");
     init_bridges(config, dispatcher.clone(), token.clone());
     logln(Color::Ok, "ok");
+    println!("");
 
     select! {
         _ = token.cancelled() => logln(Color::Err, "program crashed!"),
@@ -59,6 +60,12 @@ async fn init_bridge(socket: String, dispatcher: Sender<Command>, token: Cancell
     }
 }
 
+enum ReqOutcome {
+    Disconnected,
+    Crashed,
+    Processed,
+}
+
 async fn handle_connection(stream: FramedString<TcpStream>, dispatcher: Sender<Command>, token: CancellationToken) {
     let (tx, mut rx) = stream.split();
     let tx = Arc::new(Mutex::new(tx));
@@ -66,11 +73,13 @@ async fn handle_connection(stream: FramedString<TcpStream>, dispatcher: Sender<C
         select! {
             _ = token.cancelled() => break,
             option = rx.next() => {
-                let mut go_on = false;
+                let mut req_outcome = ReqOutcome::Disconnected;
                 if let Some(result) = option {
+                    req_outcome = ReqOutcome::Crashed;
                     if let Ok(bytes) = result {
                         if let Ok(str_ref) = std::str::from_utf8(&bytes) {
                             if let Ok(request) = toml::from_str::<Request>(str_ref) {
+                                log(Color::Text, "handling request... ");
                                 let response = {
                                     let result = handle_request(tx.clone(), request, dispatcher.clone(), token.clone()).await;
                                     if result.is_err() {
@@ -78,19 +87,34 @@ async fn handle_connection(stream: FramedString<TcpStream>, dispatcher: Sender<C
                                     }
                                     result.unwrap()
                                 };
-                                if let Ok(string) = toml::to_string(&response) {
-                                    if tx.lock().await.send(string.into()).await.is_ok() {
-                                        go_on = true;
+                                logln(Color::Ok, "ok");
+                                log(Color::Text, "sending response... ");
+                                if !response.ress.is_empty() {
+                                    if let Ok(string) = toml::to_string(&response) {
+                                        if tx.lock().await.send(Bytes::from(string)).await.is_ok() {
+                                            req_outcome = ReqOutcome::Processed;
+                                            logln(Color::Ok, "ok")
+                                        }
                                     }
+                                } else {
+                                    req_outcome = ReqOutcome::Processed;
+                                    logln(Color::Warn, "unnecessary");
                                 }
                             }
                         }
                     }
                 }
-                if go_on {
-                    logln(Color::Warn, &format!("request session crahsed! [code:{}]", go_on));
-                    break;
-                }
+                match req_outcome {
+                    ReqOutcome::Processed => {},
+                    ReqOutcome::Crashed => {
+                        logln(Color::Err, "bridge session ended! [crashed]");
+                        break;
+                    },
+                    ReqOutcome::Disconnected => {
+                        logln(Color::Warn, "bridge session ended! [disconnected]");
+                        break;
+                    }
+                };
             },
         }
     }
@@ -101,29 +125,39 @@ async fn handle_request(tx: Arc<Mutex<SplitSink<FramedString<TcpStream>, Bytes>>
     select! {
         _ = token.cancelled() => {Err(std::io::Error::new(std::io::ErrorKind::Interrupted, "token cancelled"))?},
         result = async move {
-                let mut handles = Vec::new();
-                if let Some(recvs) = request.recvs {
-                    for recv in recvs {
-                        tokio::spawn(launch_recv(tx.clone(), recv, dispatcher.clone(), clone.clone()));
+            let mut handles = Vec::new();
+            if let Some(recvs) = request.recvs {
+                for recv in recvs {
+                    tokio::spawn(launch_recv(tx.clone(), recv, dispatcher.clone(), clone.clone()));
+                }
+            }
+            let mut ress = Vec::new();
+            if let Some(sends) = request.sends {
+                for send in &sends {
+                    if let Some(expect) = &send.expect {
+                        let rx = Subscription::subscribe(Interest::new(Regex::new(&expect.recv.interest).unwrap()), expect.recv.num.into(), dispatcher.clone()).await.unwrap();
+                        handles.push(tokio::spawn(launch_n_recvs(expect.recv.clone(), rx)));
                     }
                 }
-                let mut ress = Vec::new();
-                if let Some(sends) = request.sends {
-                    for send in &sends {
-                        if let Some(recv) = &send.expect {
-                            let rx = Subscription::subscribe(Interest::new(Regex::new(&recv.interest).unwrap()), recv.num.into(), dispatcher.clone()).await.unwrap();
-                            handles.push(tokio::spawn(launch_n_recvs(recv.clone(), rx)));
-                        }
-                    }
-                    for send in sends {
-                        dispatcher.send(Command::Forward(Event::new(&send.topic, Bytes::from(send.data)))).await?;
-                    }
-                    for handle in handles {
-                        ress.push(handle.await?);
+                for send in sends {
+                    let packet = Packet {
+                        topic: match send.expect {
+                            Some(exp) => Some(exp.topic),
+                            None => None,
+                        },
+                        data: send.data
+                    };
+                    dispatcher.send(Command::Forward(Event::new(&send.topic, Bytes::from(toml::to_string(&packet)?)))).await?;
+                }
+                for handle in handles {
+                    let res = handle.await?;
+                    if let Some(r) = res {
+                        ress.push(r);
                     }
                 }
-                Ok(Response { ress })
-            } => {result}
+            }
+            Ok(Response { ress })
+        } => {result}
     }
 }
 
@@ -133,16 +167,16 @@ async fn launch_recv(tx: Arc<Mutex<SplitSink<FramedString<TcpStream>, Bytes>>>, 
         _ = async move {
                     if recv.num == 0 {
                         tokio::spawn(async move {
-                            let mut rx = Subscription::subscribe(Interest::new(Regex::new(&recv.interest).unwrap()), recv.num.into(), dispatcher.clone()).await.unwrap();
+                            let mut rx = Subscription::subscribe(Interest::new(Regex::new(&recv.interest).unwrap()), 32, dispatcher.clone()).await.unwrap();
                             while let Some(arc) = rx.recv().await {
                                 let res = Res {
                                     id: recv.id.clone(),
-                                    events: vec![arc.as_ref().clone()],
+                                    packets: vec![toml::from_str(std::str::from_utf8(&arc.data).unwrap()).unwrap()],
                                 };
                                 let response = Response {
                                     ress: vec![res],
                                 };
-                                let bytes: Bytes = toml::to_string(&response).unwrap().into();
+                                let bytes: Bytes = toml::to_string(&response).unwrap().as_bytes().to_vec().into();
                                 tx.lock().await.send(bytes).await.unwrap();
                             }
                         });
@@ -153,7 +187,7 @@ async fn launch_recv(tx: Arc<Mutex<SplitSink<FramedString<TcpStream>, Bytes>>>, 
                                 if let Some(arc) = rx.recv().await {
                                     let res = Res {
                                         id: recv.id.clone(),
-                                        events: vec![arc.as_ref().clone()],
+                                        packets: vec![toml::from_str(std::str::from_utf8(&arc.data).unwrap()).unwrap()],
                                     };
                                     let response = Response {
                                         ress: vec![res],
@@ -170,18 +204,19 @@ async fn launch_recv(tx: Arc<Mutex<SplitSink<FramedString<TcpStream>, Bytes>>>, 
     }
 }
 
-async fn launch_n_recvs(recv: Recv, mut rx: tokio::sync::mpsc::Receiver<Arc<Event>>) -> Res {
-    let mut events = Vec::with_capacity(recv.num.into());
-    if recv.num > 0 {
-        for _ in 0..recv.num {
-            let event = rx.recv().await.ok_or(std::io::Error::new(std::io::ErrorKind::ConnectionAborted, "comms dropped")).unwrap();
-            events.push(event.as_ref().clone());
-        }
+async fn launch_n_recvs(recv: Recv, mut rx: tokio::sync::mpsc::Receiver<Arc<Event>>) -> Option<Res> {
+    let mut packets = Vec::with_capacity(recv.num.into());
+    if recv.num == 0 {
+        return None
     }
-    Res {
+    for _ in 0..recv.num {
+        let event = rx.recv().await.ok_or(std::io::Error::new(std::io::ErrorKind::ConnectionAborted, "comms dropped")).unwrap();
+        packets.push(toml::from_str(std::str::from_utf8(&event.data).unwrap()).unwrap());
+    }
+    Some(Res {
         id: recv.id,
-        events,
-    }
+        packets,
+    })
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -202,8 +237,8 @@ struct Request {
 #[derive(Debug, Serialize, Deserialize)]
 struct Send {
     pub topic: String,
-    pub data: String,
-    pub expect: Option<Recv>,
+    pub data: Vec<u8>,
+    pub expect: Option<Expect>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -211,6 +246,18 @@ struct Recv {
     pub id: String,
     pub interest: String,
     pub num: u16,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct Expect {
+    pub topic: String,
+    pub recv: Recv,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct Packet {
+    pub topic: Option<String>,
+    pub data: Vec<u8>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -221,7 +268,7 @@ struct Response {
 #[derive(Debug, Serialize, Deserialize)]
 struct Res {
     pub id: String,
-    pub events: Vec<Event>,
+    pub packets: Vec<Packet>,
 }
 
 enum Color {
