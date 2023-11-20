@@ -20,12 +20,12 @@ class Aggregator:
         avg_weights = [np.array([w[i] for w in ws]).mean(axis=0) for i in range(len(ws[0]))]
         self.model.set_weights(avg_weights)
     
-    def run(self, subset, cycles):
+    def run(self, subset, epochs, cycles):
         if self.model is not None:
             for _ in range(cycles):
                 trs = rd.sample(self.trainers, k = int(len(self.trainers) * subset))
 
-                bin_model = toml.dumps({'model': self.model.to_json(), 'weights': self.model.get_weights()}, encoder=toml.TomlNumpyEncoder()).encode()
+                bin_model = toml.dumps({'epochs': epochs, 'model': self.model.to_json(), 'weights': self.model.get_weights()}, encoder=toml.TomlNumpyEncoder()).encode()
 
                 send = {'sends': []}
                 for i in range(len(trs)):
@@ -68,6 +68,7 @@ if __name__ == '__main__':
 
     while True:
         subset = float(input('subset: '))
+        epochs = int(input('epochs: '))
         cycles = int(input('cylces: '))
-        aggr.run(subset, cycles)
+        aggr.run(subset, epochs, cycles)
         print('')

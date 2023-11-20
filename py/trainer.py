@@ -30,13 +30,13 @@ class Trainer:
     def normalize(sample, label):
        return tf.cast(sample, tf.float32) / 255., label
     
-    def train(self):
+    def train(self, epochs):
         self.model.compile(
             optimizer=tf.keras.optimizers.Adam(0.001),
             loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
             metrics=[tf.keras.metrics.SparseCategoricalAccuracy()],
         )
-        self.model.fit(self.train_set, epochs=6, validation_data=self.test_set)
+        self.model.fit(self.train_set, epochs=epochs, validation_data=self.test_set)
     
     def run(self, topic, num, tot):
         (self.train_set, self.test_set), self.info = tfds.load('mnist', split=[f'train[{(num - 1) * 100 / tot}%:{num * 100 / tot}%]', f'test[{(num - 1) * 100 / tot}%:{num * 100 / tot}%]'], shuffle_files=True, as_supervised=True, with_info=True)
@@ -57,13 +57,14 @@ class Trainer:
             data = bytes(pkt['data']).decode()
             toml_model = toml.loads(data)
 
+            epochs = toml_model['epochs']
             json_model = toml_model['model']
             weights = [np.array(w) for w in toml_model['weights']]
 
             self.model = tf.keras.models.model_from_json(json_model)
             self.model.set_weights(weights)
 
-            self.train()
+            self.train(epochs)
 
             bin_weights = toml.dumps({'weights': self.model.get_weights()}, encoder=toml.TomlNumpyEncoder()).encode()
 
