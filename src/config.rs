@@ -94,7 +94,7 @@ pub async fn init_connections(path: &str, adv: bool, dispatcher: mpsc::Sender<Co
                     Err(_) => continue,
                 };
                 let interest = Interest::new(regex);
-                launch_sender(receiver.clone(), channel.protocol, &channel.address, interest, buffer, dispatcher.clone(), token.clone());
+                launch_sender(if adv { receiver.clone() } else { None }, channel.protocol, &channel.address, interest, buffer, dispatcher.clone(), token.clone());
             }
         }
     }
