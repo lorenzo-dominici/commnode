@@ -1,0 +1,4 @@
+dispatcher_buffer = 32
+channels_size = 8
+configs_path = "./config/echo-config.toml"
+sockets = ["127.0.0.1:9000"]

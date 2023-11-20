@@ -1,0 +1,23 @@
+[receiver]
+adv_topic = "adv"
+adv_interest = "^adv$"
+
+[[receiver.node.channels]]
+address = "127.0.0.1:8000"
+protocol = "TCP"
+interest = '''^aggregator model trained .*$'''
+
+[[sender.channels]]
+address = "127.0.0.1:8010"
+protocol = "TCP"
+interest = "^alice train model$"
+
+[[sender.channels]]
+address = "127.0.0.1:8020"
+protocol = "TCP"
+interest = "^bob train model$"
+
+[[sender.channels]]
+address = "127.0.0.1:8030"
+protocol = "TCP"
+interest = "^charlie train model$"

@@ -1,0 +1,8 @@
+[receiver]
+adv_topic = "adv"
+adv_interest = "^adv$"
+
+[[receiver.node.channels]]
+address = "127.0.0.1:8010"
+protocol = "TCP"
+interest = "^alice train model$"
