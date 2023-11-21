@@ -85,7 +85,7 @@ async fn remote_udp_run() {
 async fn remote_udp_server_process() {
     let (tx, mut rx) = mpsc::channel(32);
     let token = CancellationToken::new();
-    udp::new_receiver("127.0.0.1:8080", tx, token.clone()).await.unwrap();
+    udp::new_receiver("127.0.0.1:8081", tx, token.clone()).await.unwrap();
     let event = rx.recv().await.unwrap();
     assert!(event.data.to_vec().ends_with("success".as_bytes()));
     token.cancel()
@@ -93,7 +93,7 @@ async fn remote_udp_server_process() {
 
 async fn remote_udp_client_process() {
     let (tx, rx) = mpsc::channel(32);
-    udp::new_sender("127.0.0.1:8080", rx).await.unwrap();
+    udp::new_sender("127.0.0.1:8081", rx).await.unwrap();
     let event = Event::new("test0", Bytes::from_static("success".as_bytes()));
     tx.send(event).await.unwrap();
 }
