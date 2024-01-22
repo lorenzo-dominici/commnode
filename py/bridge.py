@@ -1,6 +1,7 @@
 import socket
 import struct
 import toml
+import time
 
 class Bridge:
     def __init__(self, host, port):
@@ -13,16 +14,19 @@ class Bridge:
 
     def send(self, message):
         try:
+            print(f'SEND [{time.localtime()}] ', end='')
             # Prefix the message with its length as a 4-byte little-endian binary data
             message_length = len(message)
             length_prefix = struct.pack('<I', message_length)
-            msg = length_prefix + message.encode()
+            size = len(length_prefix + message.encode())
             self.socket.sendall(length_prefix + message.encode())
+            print(f'... [{time.localtime()}] = {size} Bytes')
         except Exception as e:
             pass
 
     def receive(self):
         try:
+            print(f'RECV [{time.localtime()}] ', end='')
             # Receive the length prefix (4 bytes, little-endian)
             length_prefix = self.socket.recv(4)
             if not length_prefix:
@@ -41,7 +45,11 @@ class Bridge:
                 message_length -= len(d)
                 data += d
             
-            return data.decode()
+            msg = data.decode()
+
+            print(f'... [{time.localtime()}] = {len(data) + 4} Bytes')
+
+            return msg
         except Exception as e:
             return None
 

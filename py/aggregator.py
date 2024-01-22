@@ -62,7 +62,7 @@ if __name__ == '__main__':
         loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
         metrics=[tf.keras.metrics.SparseCategoricalAccuracy()],
     )
-    aggr.trainers = ['alice', 'bob', 'charlie']
+    aggr.trainers = ['alice', 'bob', 'charlie'][:-1]
 
     os.system('clear')
 

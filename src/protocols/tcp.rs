@@ -7,6 +7,8 @@ use tokio_util::sync::CancellationToken;
 
 use futures::{StreamExt, SinkExt};
 
+use chrono::Utc;
+
 use crate::framing::{FramedStream, frame_stream};
 use crate::Event;
 
@@ -50,6 +52,7 @@ async fn process(mut stream: FramedStream<TcpStream>, tx: mpsc::Sender<Event>, t
             _ = token.cancelled() => break,
         Some(msg) = stream.next() => {
             if let Ok(event) = msg {
+                println!("IN [{}] {} - \"{}\" = {} Bytes", Utc::now(), &event.timestamp, &event.topic, event.data.len());
                 let _ = tx.send(event).await;
             }
         },
@@ -74,6 +77,7 @@ pub async fn new_sender<T: ToSocketAddrs>(addr: T, rx: mpsc::Receiver<Event>) ->
 // Sender task
 async fn send(mut stream: FramedStream<TcpStream>, mut rx: mpsc::Receiver<Event>) {
     while let Some(event) = rx.recv().await {
+        println!("OUT [{}] {} - \"{}\" = {} Bytes", Utc::now(), &event.timestamp, &event.topic, event.data.len());
         let _ = stream.send(event).await;
     }
 }

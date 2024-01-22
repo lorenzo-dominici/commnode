@@ -56,8 +56,14 @@ impl Dispatcher {
                 _ = self.token.cancelled() => break,
                 Some(cmd) = self.rx.recv() => {
                     match cmd {
-                            Command::Subscribe(sub) => self.subs.push(sub),
-                            Command::Forward(event) => self.dispatch(event),
+                            Command::Subscribe(sub) => {
+                                println!("SUB [{}]", Utc::now());
+                                self.subs.push(sub);
+                            },
+                            Command::Forward(event) => {
+                                println!("PUB [{}] {} - \"{}\" = {} Bytes", Utc::now(), &event.timestamp, &event.topic, event.data.len());
+                                self.dispatch(event);
+                            },
                         }
                 },
             }
