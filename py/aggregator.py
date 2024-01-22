@@ -23,7 +23,7 @@ class Aggregator:
     def run(self, subset, epochs, cycles):
         if self.model is not None:
             for _ in range(cycles):
-                trs = rd.sample(self.trainers, k = int(len(self.trainers) * subset))
+                trs = rd.sample(self.trainers, k = int(round(len(self.trainers) * subset)))
 
                 bin_model = toml.dumps({'epochs': epochs, 'model': self.model.to_json(), 'weights': self.model.get_weights()}, encoder=toml.TomlNumpyEncoder()).encode()
 
