@@ -26,7 +26,7 @@ class Bridge:
 
     def receive(self):
         try:
-            print(f'RECV [{time.time_ns()}] ', end='')
+            print(f'\x1b[94mRECV\x1b[0m [{time.time_ns()}] ', end='')
             # Receive the length prefix (4 bytes, little-endian)
             length_prefix = self.socket.recv(4)
             if not length_prefix:
