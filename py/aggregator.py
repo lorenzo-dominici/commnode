@@ -49,8 +49,8 @@ class Aggregator:
 
 
 if __name__ == '__main__':
-    host = sys.argv[1]
-    port = sys.argv[2]
+    host = '127.0.0.1' # sys.argv[1]
+    port = '8000' # sys.argv[2]
     aggr = Aggregator(host, port)
     aggr.model = tf.keras.models.Sequential([
         tf.keras.layers.Flatten(input_shape=(28, 28)),

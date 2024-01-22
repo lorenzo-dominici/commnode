@@ -14,19 +14,19 @@ class Bridge:
 
     def send(self, message):
         try:
-            print(f'SEND [{time.localtime()}] ', end='')
+            print(f'\x1b[96mSEND\x1b[0m [{time.time_ns()}] ', end='')
             # Prefix the message with its length as a 4-byte little-endian binary data
             message_length = len(message)
             length_prefix = struct.pack('<I', message_length)
             size = len(length_prefix + message.encode())
             self.socket.sendall(length_prefix + message.encode())
-            print(f'... [{time.localtime()}] = {size} Bytes')
+            print(f'... [{time.time_ns()}] = {size} Bytes')
         except Exception as e:
             pass
 
     def receive(self):
         try:
-            print(f'RECV [{time.localtime()}] ', end='')
+            print(f'RECV [{time.time_ns()}] ', end='')
             # Receive the length prefix (4 bytes, little-endian)
             length_prefix = self.socket.recv(4)
             if not length_prefix:
@@ -47,7 +47,7 @@ class Bridge:
             
             msg = data.decode()
 
-            print(f'... [{time.localtime()}] = {len(data) + 4} Bytes')
+            print(f'... [{time.time_ns()}] = {len(data) + 4} Bytes')
 
             return msg
         except Exception as e:

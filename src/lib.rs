@@ -57,11 +57,11 @@ impl Dispatcher {
                 Some(cmd) = self.rx.recv() => {
                     match cmd {
                             Command::Subscribe(sub) => {
-                                println!("SUB [{}]", Utc::now());
+                                println!("\x1b[93mSUB\x1b[0m [{}]", Utc::now());
                                 self.subs.push(sub);
                             },
                             Command::Forward(event) => {
-                                println!("PUB [{}] {} - \"{}\" = {} Bytes", Utc::now(), &event.timestamp, &event.topic, event.data.len());
+                                println!("\x1b[95mPUB\x1b[0m [{}] {} - \"{}\" = {} Bytes", Utc::now(), &event.timestamp, &event.topic, event.data.len());
                                 self.dispatch(event);
                             },
                         }
